@@ -1,6 +1,8 @@
 # game-multiplayer-state-sync
 
-A minimal C++ engine skeleton intended as the foundation for a high-frequency multiplayer game state synchronization engine. Currently in early prototype stage — see the **Workability Assessment** section for an honest evaluation.
+![Multiplayer State Sync Engine Banner](https://image.pollinations.ai/prompt/futuristic%20multiplayer%20game%20network%20engine%20synchronization%20dark%20cyberpunk%20server%20nodes%20connected%20glowing%20data%20streams%20high-tech%20banner%20wide)
+
+> A minimal C++ engine skeleton intended as the foundation for a high-frequency multiplayer game state synchronization engine. Currently in early prototype stage — see the **Workability Assessment** section for an honest evaluation.
 
 ## 🚀 Overview
 
@@ -37,9 +39,73 @@ The current implementation is deliberately minimal and consists of a single tran
 
 4. **Build System**
    - **CMake** (`CMakeLists.txt`): defines project `Engine`, producing an executable named `engine` from `main.cpp`. Minimum CMake version: 3.10.
-   - **Docker**: multi-purpose single-stage build using `gcc:latest`, compiling directly with `g++ -o engine main.cpp` (bypassing CMake inside the container) and setting `CMD ["./engine"]`.
+   - **Docker**: single-stage build using `gcc:latest`, compiling directly with `g++ -o engine main.cpp` (bypassing CMake inside the container) and setting `CMD ["./engine"]`.
 
-> **Note:** There is currently **no networking code** — no sockets, no UDP/TCP transport, no state snapshot/delta logic, and no client-server protocol. The "multiplayer state sync" functionality is aspirational at this stage.
+### Execution Flow
+
+```mermaid
+sequenceDiagram
+    participant M as main()
+    participant T as std::thread t1
+    participant C as core_loop()
+    M->>M: print "Starting High-Frequency Engine..."
+    M->>T: spawn thread(core_loop)
+    T->>C: execute
+    C->>C: print "Engine Core Initialized"
+    C-->>T: return (thread finishes)
+    M->>T: t1.join() (blocks until done)
+    M->>M: return 0
+```
+
+### Component & Build Architecture
+
+```mermaid
+flowchart TD
+    subgraph Repo["Repository"]
+        A[main.cpp<br/>Entry point + core_loop]
+        B[CMakeLists.txt<br/>CMake ≥ 3.10]
+        C[Dockerfile<br/>gcc:latest]
+    end
+
+    subgraph Local["Local Build Paths"]
+        D[cmake .. && make]
+        E["g++ -std=c++11 -pthread -o engine main.cpp"]
+    end
+
+    subgraph Container["Docker Build"]
+        F["g++ -o engine main.cpp<br/>(inside container)"]
+    end
+
+    G[engine binary<br/>short-lived CLI process]
+
+    A --> B --> D --> G
+    A --> E --> G
+    A --> C --> F --> G
+```
+
+### Intended Future Direction (Aspirational)
+
+```mermaid
+flowchart LR
+    subgraph Clients
+        P1[Player 1]
+        P2[Player 2]
+        P3[Player N]
+    end
+
+    subgraph Engine["Future State Sync Engine"]
+        TL[Fixed-Tick Loop<br/>core_loop]
+        SS[State Snapshot<br/>/ Delta Serializer]
+        NT[UDP/TCP<br/>Transport Layer]
+    end
+
+    P1 <-->|inputs / snapshots| NT
+    P2 <-->|inputs / snapshots| NT
+    P3 <-->|inputs / snapshots| NT
+    NT --> TL --> SS --> NT
+```
+
+> **Note:** The diagram above represents the design goal implied by the repository name. **None of the networking, tick scheduling, or state replication components exist in the current code.**
 
 ## 🐳 Running with Docker (Recommended)
 
@@ -64,15 +130,23 @@ Starting High-Frequency Engine...
 Engine Core Initialized
 ```
 
-> **Note on `docker-compose`:** No `docker-compose.yml` is included in this repository, so `docker-compose up` will **not** work out of the box. The program is also a short-lived CLI process (not a server listening on a port), so port mappings like `-p 8080:8080` are unnecessary. If you want Compose support, create a `docker-compose.yml` such as:
->
-> ```yaml
-> services:
->   engine:
->     build: .
-> ```
->
-> Then run `docker-compose up --build`.
+### Using docker-compose
+
+No `docker-compose.yml` is included in this repository, so `docker-compose up` will **not** work out of the box. To enable it, create a `docker-compose.yml` in the repository root:
+
+```yaml
+services:
+  engine:
+    build: .
+```
+
+Then run:
+
+```bash
+docker-compose up --build
+```
+
+> **Note:** The program is a short-lived CLI process (not a server listening on a port), so port mappings like `-p 8080:8080` are unnecessary at this stage.
 
 ## 🛠️ Building Locally (Without Docker)
 
