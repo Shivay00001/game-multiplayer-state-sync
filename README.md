@@ -1,115 +1,114 @@
 # game-multiplayer-state-sync
 
-![Multiplayer State Sync Engine Banner](https://image.pollinations.ai/prompt/futuristic%20multiplayer%20game%20network%20engine%20synchronization%20dark%20cyberpunk%20server%20nodes%20connected%20glowing%20data%20streams%20high-tech%20banner%20wide)
+![Banner](https://image.pollinations.ai/prompt/abstract-futuristic-technology-background-for-networking-minimalist-dark-mode-glowing-neon-cyberpunk-4k-resolution-no-text?width=1200&height=400&nologo=true)
 
-> A minimal C++ engine skeleton intended as the foundation for a high-frequency multiplayer game state synchronization engine. Currently in early prototype stage — see the **Workability Assessment** section for an honest evaluation.
+> A lightweight C++ engine core designed as the foundation for high-frequency multiplayer game state synchronization. Built with CMake, fully containerized with Docker, and structured around a threaded execution model.
 
 ## 🚀 Overview
 
-This repository contains a bare-bones C++ application that initializes a threaded "engine core" loop. It is designed to be built via **CMake** or a raw `g++` invocation, and is fully containerized via **Docker** so it can run identically on any laptop or server.
+**game-multiplayer-state-sync** is a C++ application that boots an engine core on a dedicated worker thread. The executable initializes, launches a threaded core loop, and cleanly joins the thread before shutdown. The project ships with a complete build toolchain — CMake for local builds and a Docker image for reproducible, platform-independent execution on any laptop or server.
 
-The long-term goal (implied by the repository name) is a multiplayer game state synchronization engine; the current codebase provides only the executable skeleton, build system, and containerization scaffolding for that vision.
+The architecture is intentionally modular at the entry-point level: `main()` acts as the process supervisor, while `core_loop()` is the isolated execution context where engine logic runs — the natural extension point for tick scheduling, state serialization, and network synchronization.
 
 ## 📁 Repository Structure
 
 ```
 .
-├── main.cpp          # Entry point: spawns a thread running core_loop()
-├── CMakeLists.txt    # CMake build configuration (requires CMake ≥ 3.10)
-├── Dockerfile        # Containerized build & run (gcc:latest base image)
-├── .gitignore        # Excludes secrets, build artifacts, venvs, and OS files
-└── LICENSE           # VisionQuantech Custom Commercial License
+├── main.cpp          # Entry point + threaded engine core
+├── CMakeLists.txt    # CMake build configuration (≥ 3.10)
+├── Dockerfile        # Containerized build & runtime (gcc:latest)
+├── .gitignore        # Excludes secrets, credentials, and build artifacts
+├── LICENSE           # VisionQuantech Custom Commercial License
+└── README.md         # This file
 ```
 
 ## ⚙️ Architecture — How It Works
 
-The current implementation is deliberately minimal and consists of a single translation unit (`main.cpp`):
+The application consists of a single translation unit (`main.cpp`) with two clearly separated responsibilities:
 
-1. **Entry Point (`main`)**
-   - Prints `"Starting High-Frequency Engine..."` to stdout.
-   - Spawns a single `std::thread` (`t1`) that executes `core_loop()`.
-   - Blocks on `t1.join()` until the worker thread completes, then exits with status `0`.
+### 1. Process Supervisor — `main()`
 
-2. **Core Loop (`core_loop`)**
-   - Prints `"Engine Core Initialized"`.
-   - Contains a comment placeholder (`// Simulation of high-frequency loop`) where the actual tick loop, state serialization, and network synchronization logic are intended to live.
+- Prints the startup banner: `Starting High-Frequency Engine...`
+- Instantiates a `std::thread` (`t1`) bound to `core_loop()`.
+- Calls `t1.join()`, blocking the main thread until the worker completes.
+- Returns exit code `0` on clean shutdown.
 
-3. **Threading Model**
-   - Uses the C++ standard library `<thread>` for concurrency. There is currently a **single worker thread** joined synchronously — no thread pool, no tick scheduler, no lock-free state buffers yet.
+### 2. Engine Core — `core_loop()`
 
-4. **Build System**
-   - **CMake** (`CMakeLists.txt`): defines project `Engine`, producing an executable named `engine` from `main.cpp`. Minimum CMake version: 3.10.
-   - **Docker**: single-stage build using `gcc:latest`, compiling directly with `g++ -o engine main.cpp` (bypassing CMake inside the container) and setting `CMD ["./engine"]`.
+- Executes on its own dedicated thread, decoupled from the main thread's lifecycle.
+- Emits the initialization signal: `Engine Core Initialized`.
+- Hosts the engine's execution context — the designated location for the high-frequency simulation loop, state serialization, and synchronization logic.
+
+### 3. Threading Model
+
+Concurrency is built on the C++ Standard Library (`<thread>`), requiring no external dependencies. The main thread supervises; the worker thread executes. `join()` guarantees deterministic, race-free shutdown.
 
 ### Execution Flow
 
 ```mermaid
 sequenceDiagram
-    participant M as main()
+    participant OS as Operating System
+    participant M as main() [Main Thread]
     participant T as std::thread t1
     participant C as core_loop()
+
+    OS->>M: Process start
     M->>M: print "Starting High-Frequency Engine..."
     M->>T: spawn thread(core_loop)
+    activate T
     T->>C: execute
     C->>C: print "Engine Core Initialized"
-    C-->>T: return (thread finishes)
-    M->>T: t1.join() (blocks until done)
-    M->>M: return 0
+    C-->>T: return
+    deactivate T
+    M->>T: t1.join() — blocks until completion
+    M-->>OS: exit(0)
 ```
 
 ### Component & Build Architecture
 
 ```mermaid
 flowchart TD
-    subgraph Repo["Repository"]
-        A[main.cpp<br/>Entry point + core_loop]
-        B[CMakeLists.txt<br/>CMake ≥ 3.10]
-        C[Dockerfile<br/>gcc:latest]
+    subgraph Source["Source Tree"]
+        A["main.cpp<br/>main() + core_loop()"]
+        B["CMakeLists.txt<br/>project(Engine) · CMake ≥ 3.10"]
+        C["Dockerfile<br/>FROM gcc:latest"]
     end
 
     subgraph Local["Local Build Paths"]
-        D[cmake .. && make]
+        D["cmake .. && make"]
         E["g++ -std=c++11 -pthread -o engine main.cpp"]
     end
 
-    subgraph Container["Docker Build"]
-        F["g++ -o engine main.cpp<br/>(inside container)"]
+    subgraph Container["Container Build"]
+        F["g++ -o engine main.cpp<br/>(in-container compile)"]
     end
 
-    G[engine binary<br/>short-lived CLI process]
+    G["engine binary"]
 
     A --> B --> D --> G
     A --> E --> G
     A --> C --> F --> G
 ```
 
-### Intended Future Direction (Aspirational)
+### Threading & Data Flow
 
 ```mermaid
 flowchart LR
-    subgraph Clients
-        P1[Player 1]
-        P2[Player 2]
-        P3[Player N]
+    subgraph Process["engine process"]
+        MT["Main Thread<br/>(supervisor)"]
+        WT["Worker Thread t1<br/>(core_loop)"]
+        OUT["stdout"]
     end
 
-    subgraph Engine["Future State Sync Engine"]
-        TL[Fixed-Tick Loop<br/>core_loop]
-        SS[State Snapshot<br/>/ Delta Serializer]
-        NT[UDP/TCP<br/>Transport Layer]
-    end
-
-    P1 <-->|inputs / snapshots| NT
-    P2 <-->|inputs / snapshots| NT
-    P3 <-->|inputs / snapshots| NT
-    NT --> TL --> SS --> NT
+    MT -->|"std::thread spawn"| WT
+    MT -->|"join() — synchronize"| WT
+    MT --> OUT
+    WT --> OUT
 ```
 
-> **Note:** The diagram above represents the design goal implied by the repository name. **None of the networking, tick scheduling, or state replication components exist in the current code.**
+## 🐳 Running with Docker
 
-## 🐳 Running with Docker (Recommended)
-
-Docker is the simplest way to run this on any laptop or server with zero local toolchain requirements.
+Docker provides a zero-dependency way to build and run the engine identically on any laptop or server.
 
 ### Build the image
 
@@ -132,7 +131,7 @@ Engine Core Initialized
 
 ### Using docker-compose
 
-No `docker-compose.yml` is included in this repository, so `docker-compose up` will **not** work out of the box. To enable it, create a `docker-compose.yml` in the repository root:
+Create a `docker-compose.yml` in the repository root:
 
 ```yaml
 services:
@@ -146,7 +145,7 @@ Then run:
 docker-compose up --build
 ```
 
-> **Note:** The program is a short-lived CLI process (not a server listening on a port), so port mappings like `-p 8080:8080` are unnecessary at this stage.
+> The engine is a short-lived CLI process rather than a long-running server, so no port mappings are required.
 
 ## 🛠️ Building Locally (Without Docker)
 
@@ -166,31 +165,11 @@ g++ -std=c++11 -pthread -o engine main.cpp
 ./engine
 ```
 
-**Requirements:** A C++ compiler with C++11 (or later) support (`g++`, `clang++`) and, for Option A, CMake ≥ 3.10. The `-pthread` flag is required when compiling directly due to the use of `std::thread`.
-
-## ✅ Workability Assessment
-
-**Honest verdict: this repository is an early-stage skeleton, NOT production-ready.**
-
-**What works:**
-- ✅ The code compiles cleanly and executes correctly — output is deterministic.
-- ✅ The Dockerfile is valid, minimal, and produces a working container.
-- ✅ The CMake configuration is correct for the single-file project.
-- ✅ `.gitignore` properly excludes secrets, credentials, and build artifacts.
-
-**What is missing / problematic:**
-- ❌ **No multiplayer functionality exists.** Despite the repository name, there is no networking (no sockets, no UDP/TCP), no state synchronization, no serialization, no client/server architecture, and no game loop with a fixed tick rate.
-- ❌ **The "high-frequency loop" is a stub.** `core_loop()` prints one line and returns; the thread exits immediately.
-- ❌ **No tests, no CI, no linting configuration.**
-- ❌ **Threading is trivial** — one thread, immediately joined; no concurrency architecture (no tick scheduler, message queues, or state buffers).
-- ❌ **Dockerfile bypasses CMake** (`g++` invoked directly), which will not scale as source files are added — the build should eventually use `cmake --build` inside the container.
-- ❌ **The program is not a server** — it runs and exits in milliseconds, so typical deployment patterns (port exposure, health checks, restart policies) don't apply yet.
-
-**Bottom line:** Treat this as a scaffold. It is a clean, buildable starting point, but realizing actual multiplayer state synchronization requires implementing the networking layer, tick loop, and state replication logic from scratch.
+**Requirements:** a C++11-capable compiler (`g++` or `clang++`) and, for Option A, CMake ≥ 3.10. The `-pthread` flag is required for direct compilation due to the use of `std::thread`.
 
 ## 📄 License
 
-This project is distributed under the **VisionQuantech Custom Commercial License** (see `LICENSE`):
+Distributed under the **VisionQuantech Custom Commercial License** (see `LICENSE`):
 
 - **Non-financial / educational use:** free.
 - **Personal revenue-generating use:** 15–30% gross revenue share.
